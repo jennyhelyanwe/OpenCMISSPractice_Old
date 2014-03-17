@@ -1,0 +1,35 @@
+Documentation:
+
+0. Initialise OpenCMISS 
+Set error handling as TRAP_ERROR, and turn all levels of diagnostic testing on. 
+
+1. Coordinate system
+RC
+
+2. Region. 
+
+3. Basis functions
+Set up one linear basis for interpolation of hydrostatic pressure and one cubic basis function for interpolation of geometry. 
+
+4. Mesh
+Set up a generated regular mesh (rectangular/cuboid) and give the global measurements of the cube as well as the number of elements in each global direction. 
+
+5. Decomposition
+Set seed of random generator to be 0, this ensures that the same decomposition is used each time. Also need to set that faces be calculated to enable application of pressure on faces.  
+
+6. Geometric field
+The geometric field is set up to only include the U variables in all three global directions. The values of the geometric field is set using the generated mesh (which already has the global dimensions of our cube)
+
+7. Fibre Field
+Attach fibre field to geometric field. 
+
+8. Material Field
+Attach material field to geometric field. Using Mooney-Rivlin constitutive model. This model has 2 coefficients. Set them to be 2.0 and 6.0
+
+9. Dependent Field
+Create dependent field with type: geometric_general. This field has 2 variables, one for the non derivative value, and one for the du/dn value. Each variable has 4 components, three for the geometry, and a fourth component for the hydrostatic pressure interpolation - this value is set to -14.0. The dependent field is initialised with the undeformed geometries from the geometric field. 
+
+10. Equation Set
+
+
+

@@ -1,13 +1,16 @@
-######## Uniaxial extension using tricubic hermite element ###############
-## This script file solves a uniaxial extension in the x axis on a single
-## tricubic hermite cuboid element. 
+######## Pressure application on cube face ###############
+## This script file solves an application of pressure on the right face of a 
+## cube.  
 
-### Step 0: Housekeeping
+### Step 0: Housekeeping ###############################################################
 import sys, os
 sys.path.append(os.sep.join((os.environ['OPENCMISS_ROOT'],'cm','bindings','python')));
 
 # Initialise OpenCMISS
 from opencmiss import CMISS
+CMISSErrorHandlingModeSet(CMISS.ErrorHandlingModes.TRAP_ERROR)
+# Set all diganostic levels on for testing
+CMISS.DiagnosticsSetOn(CMISS.DiagnosticTypes.ALL,[1,2,3,4,5],"Diagnostics",["DOMAIN_MAPPINGS_LOCAL_FROM_GLOBAL_CALCULATE"])
 
 # Problem parameters
 length = 1.0
@@ -40,6 +43,7 @@ numOfXi = 3
 ### Step 1: Allow for parallel computation ############################################
 numberOfNodes = CMISS.ComputationalNumberOfNodesGet()
 rankNumber = CMISS.ComputationalNodeNumberGet()
+print "Number of domains = ", numberOfNodes
 
 ### Step 2: Set up co-ordinate system #################################################
 coordinateSystem = CMISS.CoordinateSystem()
@@ -54,396 +58,157 @@ region.CoordinateSystemSet(coordinateSystem)
 region.LabelSet("Region")
 region.CreateFinish()
 
-### Step 4: Set up tricubic hermite basis functions ###################################
-linearBasis = CMISS.Basis()  # For interpolation of hydrostatic pressure. 
+### Step 4: Set up basis functions ####################################################
+linearBasis = CMISS.Basis()
 linearBasis.CreateStart(linearBasisUserNumber)
-linearBasis.QuadratureNumberOfGaussXiSet([3]*numOfXi)
+linearBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.LINEAR_LAGRANGE]*numOfXi)
+linearBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.HIGH]*numOfXi)
+linearBasis.QuadratureLocalFaceGaussEvaluateSet(True)
 linearBasis.CreateFinish()
 
-cubicBasis = CMISS.Basis() # For geometry. 
+cubicBasis = CMISS.Basis()
 cubicBasis.CreateStart(cubicBasisUserNumber)
-cubicBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.CUBIC_HERMITE]*3)
-cubicBasis.QuadratureNumberOfGaussXiSet([3]*numOfXi)
+cubicBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.CUBIC_HERMITE]*numOfXi)
+cubicBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.HIGH]*numOfXi)
 cubicBasis.QuadratureLocalFaceGaussEvaluateSet(True)
 cubicBasis.CreateFinish()
+linearBasisNumber = 1
+cubicBasisNumber = 2
+bases = [linearBasis, cubicBasis]
 
 ### Step 5: Set up mesh ###############################################################
-# Generate a regular (cuboid) mesh
-generatedMesh  = CMISS.GeneratedMesh()
+generatedMesh = CMISS.GeneratedMesh()
 generatedMesh.CreateStart(generatedMeshUserNumber, region)
 generatedMesh.TypeSet(CMISS.GeneratedMeshTypes.REGULAR)
-generatedMesh.ExtentSet([width, length,height])
-generatedMesh.BasisSet([linearBasis,cubicBasis])
-generatedMesh.NumberOfElementsSet([numGlobalXElements, numGlobalYElements,numGlobalZElements])
+generatedMesh.BasisSet(bases) 
+generatedMesh.ExtentSet([width, length, height])
+generatedMesh.NumberOfElementsSet([numGlobalXElements,numGlobalYElements,numGlobalZElements]) 
 mesh = CMISS.Mesh()
 generatedMesh.CreateFinish(meshUserNumber, mesh)
-linearMeshComponentNumber = 1
-cubicMeshComponentNumber = 2
-### Step 6: Create decomposition ######################################################
+
+### Step 6: Decomposition #############################################################
+RandomSeedsSet(0)
 decomposition = CMISS.Decomposition()
 decomposition.CreateStart(decompositionUserNumber, mesh)
 decomposition.TypeSet(CMISS.DecompositionTypes.CALCULATED)
 decomposition.NumberOfDomainsSet(numberOfNodes)
+decomposition.CalculateFacesSet(True)
 decomposition.CreateFinish()
 
 ### Step 7: Create geometric field ####################################################
 geometricField = CMISS.Field()
-geometricField.CreateStart(geometricFieldUserNumber,region)
-geometricField.TypeSet(CMISS.FieldTypes.GEOMETRIC)
+geometricField.CreateStart(geometricFieldUserNumber)
 geometricField.MeshDecompositionSet(decomposition)
+geometricField.TypeSet(CMISS.FieldTypes.GEOMETRIC)
 geometricField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Geometry")
-for i in range(1,4):
-	geometricField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicMeshComponentNumber)
-geometricField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
-geometricField.CreateFinish()
-CMISS.GeneratedMesh_GeometricParametersCalculateNum(regionUserNumber, generatedMeshUserNumber, geometricFieldUserNumber)
+geometricField.NumberOfVariablesSet(1)
+geometricField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 3)
+for i in range (1,4)
+	geometricField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicBasisNumber)
+# Update geometric parameters
+GeneratedMesh_GeometricParametersCalculate(generatedMesh, geometricField)
 
-### Step 8: Create fibre field ########################################################
-fibre = CMISS.Field()
-fibre.CreateStart(fibreFieldUserNumber, region)
-fibre.TypeSet(CMISS.FieldTypes.FIBRE)
-fibre.MeshDecompositionSet(decomposition)
-fibre.GeometricFieldSet(geometricField)
-fibre.VariableLabelSet(CMISS.FieldVariableTypes.U, "Fibre")
-for i in range(1,4):
-	fibre.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, linearMeshComponentNumber)
-fibre.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
-fibre.CreateFinish()
+### Step 8: Create fibre field #######################################################
+fibreField= CMISS.Field()
+fibreField.CreateStart(fibreFieldUserNumber, region)
+fibreField.MeshDecomposition(decomposition)
+fibreField.TypeSet(CMISS.FieldTypes.FIBRE)
+fibreField.GeometricFieldSet(geometricField)
+fibreField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Fibre")
+fibreField.NumberOfVariablesSet(1)
+fibreField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 3)
+for i in range (1,4)
+	fibreField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicBasisNumber)
+fibreField.CreateFinish()
 
-### Step 9: Create material field #####################################################
-material = CMISS.Field()
-material.CreateStart(materialFieldUserNumber, region)
-material.TypeSet(CMISS.FieldTypes.MATERIAL)
-material.MeshDecompositionSet(decomposition)
-material.GeometricFieldSet(geometricField)
-material.VariableLabelSet(CMISS.FieldVariableTypes.U, "Material")
-material.NumberOfVariablesSet(1)
-material.NumberOfComponentsSet(CMISS.FieldVariableTypes.U,2)
-material.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, 1, linearMeshComponentNumber)
-material.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, 2, linearMeshComponentNumber)
-material.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
-material.CreateFinish() 
+### Step 9: Create material field #################################################### 
+materialField= CMISS.Field()
+materialField.CreateStart(fibreFieldUserNumber, region)
+materialField.MeshDecomposition(decomposition)
+materialField.TypeSet(CMISS.FieldTypes.MATERIAL)
+materialField.GeometricFieldSet(geometricField)
+materialField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Material")
+materialField.NumberOfVariablesSet(1)
+materialField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 2)
+for i in range (1,3)
+	materialField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U, i, CMISS.FieldInterpolation.CONSTANT)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldSetTypes.VALUES, 1, 2.0)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldSetTypes.VALUES, 2, 6.0)
+materialField.CreateFinish()
 
-material.ComponentValuesInitialiseDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES,1,2.0)
-material.ComponentValuesInitialiseDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES,2,4.0)
-
-
-### Step 10: Create dependent geometric field #########################################
+### Step 10: Create dependent field #################################################
 dependentField = CMISS.Field()
 dependentField.CreateStart(dependentFieldUserNumber, region)
+dependentField.MeshDecomposition(decomposition)
 dependentField.TypeSet(CMISS.FieldTypes.GEOMETRIC_GENERAL)
-dependentField.MeshDecompositionSet(decomposition)
 dependentField.GeometricFieldSet(geometricField)
 dependentField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Dependent")
-dependentField.DependentTypeSet(CMISS.FieldDependentTypes.DEPENDENT)
 dependentField.NumberOfVariablesSet(2)
-dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U,4)
-dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.DELUDELN,4)
-for i in range(1,4):
-	dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i,cubicMeshComponentNumber)
-	dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN, i,cubicMeshComponentNumber)
-
-dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, 4, linearMeshComponentNumber)
-dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN, 4, linearMeshComponentNumber)
+dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 4)
+for i in range (1,4)
+	dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicBasisNumber)
+	dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN, i, cubicBasisNumber)
+dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U,4, linearBasisNumber)
+dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN,4, linearBasisNumber)
+ 
 dependentField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
 dependentField.CreateFinish()
-# Initialise with undeformed geometry
+# Initialise dependent field from undeformed geometry. 
+for i in range (1,4)
+	ParametersToFieldParametersComponentCopy(
+geometricField, CMISS.FieldVariableTypes.U, CMISS.FieldSetTypes.VALUES, i, 
+dependentField, CMISS.FieldVariableTypes.U, CMISS.FieldSetTypes.VALUES, i)
+# Set hydrostatic pressure. 
+dependentField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldSetTypes.VALUES, 4, -14.0)
 
-for i in range(1,4):
-	CMISS.Field.ParametersToFieldParametersComponentCopy(
-geometricField, CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, i, dependentField, CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, i)
-
-dependentField.ComponentValuesInitialiseDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, -8.0)
-
-### Step 11: Create Equations Set and equations #######################################
+### Step 11: Create Equation set #####################################################
 equationsSetField = CMISS.Field()
+equationsSetField.CreateStart(equationsSetFieldUserNumber, region)
 equationsSet = CMISS.EquationsSet()
-equationsSet.CreateStart(equationsSetUserNumber, region, geometricField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.MOONEY_RIVLIN, equationsSetFieldUserNumber, equationsSetField)
+equationsSet.CreateStart(equationsSetUserNumber, region, FibreField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.MOONEY_RIVLIN, equationsSetFieldUserNumber, equationsSetField)
 equationsSet.CreateFinish()
-equationsSet.MaterialsCreateStart(materialFieldUserNumber, material)
-equationsSet.MaterialsCreateFinish()
-equationsSet.DependentCreateStart(dependentFieldUserNumber, dependentField)
-equationsSet.DependentCreateFinish()
+
 equations = CMISS.Equations()
 equationsSet.EquationsCreateStart(equations)
 equations.SparsityTypeSet(CMISS.EquationsSparsityTypes.SPARSE)
-equations.OutputTypeSet(CMISS.EquationsOutputTypes.NONE)
+equations.OutputTypeSet(CMISS.EquationsOutputTypes.NO_OUTPUT)
 equationsSet.EquationsCreateFinish()
 
-### Step 12: Create Problem ###########################################################
-# Define problem 
-problem = CMISS.Problem()
+### Step 12: Problem ################################################################
+problem =CMISS.Problem()
 problem.CreateStart(problemUserNumber)
-problem.SpecificationSet(CMISS.ProblemClasses.ELASTICITY, CMISS.ProblemTypes.FINITE_ELASTICITY, CMISS.ProblemSubTypes.NONE)
+problem.SpecificationSet(CMISS.ProblemClasses.ELASTICITY, CMISS.ProblemTypes.FINITE_ELASTICITY, CMISS.ProblemSubTypes.NO_SUBTYPE)
 problem.CreateFinish()
-# Create control loops
+
 problem.ControlLoopCreateStart()
 controlLoop = CMISS.ControlLoop()
-problem.ControlLoopGet([CMISS.ControlLoopIdentifiers.NODE],controlLoop)
-controlLoop.MaximumIterationsSet(2)
+problem.ControlLoopGet([CMISS.ControlLoopIdentifiers.NODE], controlLoop)
+#controlLoop.MaximumIterationsSet(100)
 problem.ControlLoopCreateFinish()
-# Create nonlinear numerical solver
-linearSolver = CMISS.Solver()
+
+### Step 13: Solvers ################################################################
 nonLinearSolver = CMISS.Solver()
+linearSolver = CMISS.Solver()
 problem.SolversCreateStart()
-problem.SolverGet([CMISS.ControlLoopIdentifiers.NODE], 1, nonLinearSolver)
-nonLinearSolver.OutputTypeSet(CMISS.SolverOutputTypes.PROGRESS)
-nonLinearSolver.NewtonJacobianCalculationTypeSet(CMISS.JacobianCalculationTypes.FD)
-nonLinearSolver.NewtonRelativeToleranceSet(1.0E-10)
+problem.SolverGet(CMISS.ControlLoopIdentifiers.NODE, 1, nonLinearSolver)
+nonLinearSolver.OutputTypeSet(CMISS.SolverOutput.PROGRESS)
+nonLinearSolver.NewtonJacobianCalculationTypeSet(CMISS.JacobianEquationsTypes.EQUATIONS)
 nonLinearSolver.NewtonLinearSolverGet(linearSolver)
-linearSolver.LinearTypeSet(CMISS.LinearSolverTypes.DIRECT)
+linearSolver.TypeSet(CMISS.LinearSolverTypes.DIRECT)
 problem.SolversCreateFinish()
-# Add solver equations sets which encompass the physics
-solverEquations = CMISS.SolverEquations()
+
+### Step 14: Solver equations #######################################################
 solver = CMISS.Solver()
+solverEquations = CMISS.SolverEquations()
 problem.SolverEquationsCreateStart()
-problem.SolverGet([CMISS.ControlLoopIdentifiers.NODE],1,solver)
-solver.SolverEquationsGet(solverEquations)
-solverEquations.SparsityTypeSet(CMISS.SolverEquationsSparsityTypes.SPARSE)
-equationsSetIndex = solverEquations.EquationsSetAdd(equationsSet)
+problem.SolverEquationsGet(solverEquations)
+solverEquations.SparsityTypeSet(CMISS.EquationsSparsityTypes.SPARSE)
+solverEquations.EquationsSetAdd(equationsSet)
 problem.SolverEquationsCreateFinish()
 
-### Step 13: Prescribe Boundary Conditions ############################################
+### Step 15: Boundary conditions #####################################################
 boundaryConditions = CMISS.BoundaryConditions()
 solverEquations.BoundaryConditionsCreateStart(boundaryConditions)
-# Set face 1,3,5,7 fixed in all directions.
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,1,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,3,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,5,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,7,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
 
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,1,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,3,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,5,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,7,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
+# Set pressure of 1.0 kPa on right face. 
 
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,1,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,3,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,5,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,7,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-
-# Apply nodal force on face 2,4,6,8 in x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,1,2,1,CMISS.BoundaryConditionsTypes.PRESSURE,-1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,1,4,1,CMISS.BoundaryConditionsTypes.PRESSURE,-2.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,1,6,1,CMISS.BoundaryConditionsTypes.PRESSURE,-1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,1,8,1,CMISS.BoundaryConditionsTypes.PRESSURE,-2.0)
-
-# Set single arc-length derivatives
-# Node 1
-# x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,1,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,1,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# y direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,1,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,1,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# z direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,1,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,1,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-# Node 2
-# x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,2,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,2,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# y direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,2,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,2,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# z direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,2,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,2,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-# Node 3
-# x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,3,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,3,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# y direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,3,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,3,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# z direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,3,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,3,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-# Node 4
-# x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,4,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,4,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# y direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,4,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,4,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# z direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,4,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,4,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-# Node 5
-# x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,5,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,5,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# y direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,5,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,5,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# z direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,5,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,5,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-# Node 6
-# x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,6,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,6,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# y direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,6,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,6,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# z direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,6,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,6,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-# Node 7
-# x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,7,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,7,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# y direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,7,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,7,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# z direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,7,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,7,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-# Node 8
-# x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,8,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,8,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# y direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,8,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,8,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# z direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,3,8,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,5,8,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-
-# Set all cross derivatives to zero in x direction. 
-# Node 1
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,1,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,1,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,1,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,1,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 2
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,2,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,2,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,2,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,2,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 3
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,3,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,3,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,3,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,3,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 4
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,4,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,4,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,4,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,4,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 5
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,5,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,5,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,5,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,5,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 6
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,6,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,6,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,6,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,6,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 7
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,7,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,7,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,7,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,7,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 8
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,8,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,8,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,8,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,8,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-
-# Set all cross derivatives to zero in y direction.
-# Node 1
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,1,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,1,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,1,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,1,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 2
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,2,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,2,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,2,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,2,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 3
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,3,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,3,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,3,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,3,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 4
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,4,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,4,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,4,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,4,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 5
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,5,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,5,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,5,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,5,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 6
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,6,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,6,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,6,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,6,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 7
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,7,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,7,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,7,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,7,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 8
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,8,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,8,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,8,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,8,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-
-# Set all cross derivatives to zero in z direction.
-# Node 1
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,1,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,1,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,1,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,1,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 2
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,2,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,2,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,2,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,2,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 3
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,3,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,3,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,3,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,3,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 4
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,4,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,4,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,4,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,4,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 5
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,5,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,5,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,5,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,5,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 6
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,6,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,6,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,6,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,6,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 7
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,7,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,7,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,7,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,7,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-# Node 8
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,4,8,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,6,8,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,7,8,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,8,8,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-
-solverEquations.BoundaryConditionsCreateFinish()
-
-### Step 14: Solve the problem ########################################################
-problem.Solve()
-
-### Step 15: Housekeeping #############################################################
-exportFields = CMISS.Fields()
-exportFields.CreateRegion(region)
-exportFields.NodesExport("../Results/Pressure","FORTRAN")
-exportFields.ElementsExport("../Results/Pressure","FORTRAN")
-exportFields.Finalise()

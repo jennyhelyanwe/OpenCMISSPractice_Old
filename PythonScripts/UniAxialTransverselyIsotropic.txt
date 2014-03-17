@@ -1,0 +1,28 @@
+Documentation:
+This script tries to replicate the old CMISS example of 10% uniaxial extension of a unit cube with fibres (30 degrees)
+
+
+0. Initialise OpenCMISS 
+Set error handling as TRAP_ERROR, and turn all levels of diagnostic testing on. 
+
+1. Coordinate system
+RC
+
+2. Region. 
+
+3. Basis functions
+Use quadratic lagrange for pressure interpolation (because of volumetric locking) and cubic hermite for geometry. 
+
+4. Mesh
+generate cube mesh. 
+
+5. Decomposition 
+standard
+
+6. Fibre field
+For a transversely isotropic material, there is only one fibre component. This is set to be at 30 degrees to the xi1 direction. 30 degrees is given in radians. 
+
+7. Material field
+use the guccione transverse isotropic. There are 5 coefficients, and they are set as the same as found in the old CMISS example. 
+
+8. 
