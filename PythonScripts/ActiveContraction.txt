@@ -1,0 +1,9 @@
+This script uses a tricubic hermite unit cube, with trilinear interpolation of hydrostatic pressure. 
+
+The bases, mesh, decomposition, and geometric field are all standard. 
+
+1. Fibre Field
+30 degrees fibre to xi1 direction, constant throughout the element. 
+
+2. Material field
+The constitutive law we are using for this contraction is the 

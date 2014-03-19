@@ -15,21 +15,27 @@ Set up one linear basis for interpolation of hydrostatic pressure and one cubic 
 Set up a generated regular mesh (rectangular/cuboid) and give the global measurements of the cube as well as the number of elements in each global direction. 
 
 5. Decomposition
-Set seed of random generator to be 0, this ensures that the same decomposition is used each time. Also need to set that faces be calculated to enable application of pressure on faces.  
+standard 
 
 6. Geometric field
-The geometric field is set up to only include the U variables in all three global directions. The values of the geometric field is set using the generated mesh (which already has the global dimensions of our cube)
+standard
 
 7. Fibre Field
-Attach fibre field to geometric field. 
+30 degrees fibre to xi1 direction. 
 
 8. Material Field
-Attach material field to geometric field. Using Mooney-Rivlin constitutive model. This model has 2 coefficients. Set them to be 2.0 and 6.0
+Attach material field to geometric field. Using transverse isotropic exponential constitutive model. This model has 5 coefficients. Set them to be 2,5,10,0,5.
 
 9. Dependent Field
-Create dependent field with type: geometric_general. This field has 2 variables, one for the non derivative value, and one for the du/dn value. Each variable has 4 components, three for the geometry, and a fourth component for the hydrostatic pressure interpolation - this value is set to -14.0. The dependent field is initialised with the undeformed geometries from the geometric field. 
+Create dependent field with type: geometric_general. This field has 2 variables, one for the non derivative value, and one for the du/dn value. Each variable has 4 components, three for the geometry, and a fourth component for the hydrostatic pressure interpolation - this value is set to -8.0. The dependent field is initialised with the undeformed geometries from the geometric field. 
 
 10. Equation Set
+standard
 
+11. Problem
+standard
+
+12. Boundary Condition
+Apply a pressure loading of -1.5 kPa on the right face. Fix the left face in all directions. 
 
 

@@ -298,6 +298,3 @@ fields.CreateRegion(region)
 fields.NodesExport("../Results/UniAxialExtension", "FORTRAN")
 fields.ElementsExport("../Results/UniAxialExtension","FORTRAN")
 fields.Finalise()
-
-
-
