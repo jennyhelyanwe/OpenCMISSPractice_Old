@@ -23,7 +23,7 @@ numOfXi = 3
 # User numbers
 (coordinateSystemUserNumber,
 	regionUserNumber,
-	linearBasisUserNumber,
+	quadraticBasisUserNumber,
 	cubicBasisUserNumber,
 	generatedMeshUserNumber,
 	meshUserNumber,
@@ -57,12 +57,12 @@ region.LabelSet("Region")
 region.CreateFinish()
 
 ### Step 3: Basis functions ############################################################
-linearBasis = CMISS.Basis()
-linearBasis.CreateStart(linearBasisUserNumber)
-linearBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.LINEAR_LAGRANGE]*numOfXi)
-linearBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.HIGH]*numOfXi)
-linearBasis.QuadratureLocalFaceGaussEvaluateSet(True)
-linearBasis.CreateFinish()
+quadraticBasis = CMISS.Basis()
+quadraticBasis.CreateStart(quadraticBasisUserNumber)
+quadraticBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.QUADRATIC_LAGRANGE]*numOfXi)
+quadraticBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.HIGH]*numOfXi)
+quadraticBasis.QuadratureLocalFaceGaussEvaluateSet(True)
+quadraticBasis.CreateFinish()
 
 cubicBasis = CMISS.Basis()
 cubicBasis.CreateStart(cubicBasisUserNumber)
@@ -70,10 +70,10 @@ cubicBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.CUBIC_HERM
 cubicBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.HIGH]*numOfXi)
 cubicBasis.QuadratureLocalFaceGaussEvaluateSet(True)
 cubicBasis.CreateFinish()
-
+quadraticBasisNumber = 2
 cubicBasisNumber = 1
-linearBasisNumber = 2
-bases = [cubicBasis, linearBasis]
+
+bases = [cubicBasis,quadraticBasis]
 
 ### Step 5: Set up mesh ###############################################################
 generatedMesh = CMISS.GeneratedMesh()
@@ -101,12 +101,21 @@ geometricField.TypeSet(CMISS.FieldTypes.GEOMETRIC)
 geometricField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Geometry")
 geometricField.NumberOfVariablesSet(1)
 geometricField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 3)
+#geometricField.NumberOfComponentsSet(CMISS.FieldVariableTypes.DELUDELN,3)
 for i in range (1,4):
 	geometricField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicBasisNumber)
+	#geometricField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN, i, cubicBasisNumber)
 geometricField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
 geometricField.CreateFinish()
 # Update geometric parameters
 generatedMesh.GeometricParametersCalculate(geometricField)
+
+# Export geometric field for debugging. 
+exportGeometricFields = CMISS.Fields()
+exportGeometricFields.CreateRegion(region)
+exportGeometricFields.NodesExport("GeometricField","FORTRAN")
+exportGeometricFields.ElementsExport("GeometricField","FORTRAN")
+exportGeometricFields.Finalise()
 
 ### Step 8: Create fibre field #######################################################
 fibreField = CMISS.Field()
@@ -114,19 +123,13 @@ fibreField.CreateStart(fibreFieldUserNumber, region)
 fibreField.TypeSet(CMISS.FieldTypes.FIBRE)
 fibreField.MeshDecompositionSet(decomposition)
 fibreField.GeometricFieldSet(geometricField)
-fibreField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Fibre")
 fibreField.NumberOfVariablesSet(1)
 fibreField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 3)
-fibreField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
+fibreField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Fibre")
 for component in range (1,4):
 	fibreField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U, component, CMISS.FieldInterpolationTypes.CONSTANT)
+fibreField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
 fibreField.CreateFinish()
-
-# For future reference, how to get the nodes in a particular component of mesh. 
-#nodes = CMISS.Nodes()
-#region.NodesGet(nodes)
-#numberOfNodes = nodes.NumberOfNodesGet()
-#cubicNodes = [n for n in range(1,numberOfNodes + 1) if mesh.NodeExists(cubicBasisNumber,n)]
 
 # Initialise the fibre rotation angles in radians
 fibreFieldAngle = 30 * pi /180  # 30 degrees in radians
@@ -140,9 +143,9 @@ materialField.CreateStart(materialFieldUserNumber, region)
 materialField.TypeSet(CMISS.FieldTypes.MATERIAL)
 materialField.MeshDecompositionSet(decomposition)
 materialField.GeometricFieldSet(geometricField)
-materialField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Material")
 materialField.NumberOfVariablesSet(1)
 materialField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 5)
+materialField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Material")
 for i in range (1,5):
 	materialField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicBasisNumber)
 materialField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
@@ -159,27 +162,27 @@ dependentField.CreateStart(dependentFieldUserNumber, region)
 dependentField.TypeSet(CMISS.FieldTypes.GEOMETRIC_GENERAL)
 dependentField.MeshDecompositionSet(decomposition)
 dependentField.GeometricFieldSet(geometricField)
-dependentField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Dependent")
 dependentField.DependentTypeSet(CMISS.FieldDependentTypes.DEPENDENT)
 dependentField.NumberOfVariablesSet(2)
 dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 4)
 dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.DELUDELN, 4)
+dependentField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Dependent")
+dependentField.VariableLabelSet(CMISS.FieldVariableTypes.DELUDELN, "DependentDeriv")
 for i in range (1,4):
 	dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicBasisNumber)
 	dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN, i, cubicBasisNumber)
-dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, 4, linearBasisNumber)
-dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN, 4, linearBasisNumber)
+dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, 4, quadraticBasisNumber)
+dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN, 4, quadraticBasisNumber)
 dependentField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
 dependentField.CreateFinish()
 
 # Initialise dependent field from undeformed geometry. 
 for i in range (1,4):
-	CMISS.Field.ParametersToFieldParametersComponentCopy(
-geometricField, CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, i, 
+	CMISS.Field.ParametersToFieldParametersComponentCopy(geometricField, CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, i, 
 dependentField, CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, i)
 
 # Set hydrostatic pressure. 
-dependentField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, -8.0)
+dependentField.ComponentValuesInitialiseDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, -6.0)
 
 ### Step 11: Create Equation set #####################################################
 equationsSetField = CMISS.Field()
@@ -213,7 +216,7 @@ linearSolver = CMISS.Solver()
 problem.SolversCreateStart()
 problem.SolverGet([CMISS.ControlLoopIdentifiers.NODE], 1, nonLinearSolver)
 nonLinearSolver.OutputTypeSet(CMISS.SolverOutputTypes.PROGRESS)
-nonLinearSolver.NewtonJacobianCalculationTypeSet(CMISS.JacobianCalculationTypes.EQUATIONS)
+nonLinearSolver.NewtonJacobianCalculationTypeSet(CMISS.JacobianCalculationTypes.FD)
 nonLinearSolver.NewtonLinearSolverGet(linearSolver)
 linearSolver.LinearTypeSet(CMISS.LinearSolverTypes.DIRECT)
 problem.SolversCreateFinish()
@@ -230,8 +233,10 @@ problem.SolverEquationsCreateFinish()
 ### Step 15: Boundary conditions #####################################################
 boundaryConditions = CMISS.BoundaryConditions()
 solverEquations.BoundaryConditionsCreateStart(boundaryConditions)
-
-# Set face 1,3,5,7 fixed in all directions.
+geometryNodes = [1,2,3,4,5,6,7,8]
+#geometryNodes = [1,3,7,9,19,21,25,27]
+# Set face 1,3,5,7
+# Set face 1,7,19,25 fixed in all directions.
 boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,1,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
 boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,3,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
 boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,5,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
@@ -245,28 +250,29 @@ boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.G
 boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,5,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
 boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,7,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
 
-# Set displacement of face 2,4,6,8 in x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,2,1,CMISS.BoundaryConditionsTypes.FIXED,-2.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,4,1,CMISS.BoundaryConditionsTypes.FIXED,-2.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,6,1,CMISS.BoundaryConditionsTypes.FIXED,-2.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,8,1,CMISS.BoundaryConditionsTypes.FIXED,-2.0)
+# Set force loading on face 2,4,6,8 in x direction
+# Set displacement of face 3,9,21,27 in x direction
+boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,2,1,CMISS.BoundaryConditionsTypes.FIXED,1.1)
+boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,4,1,CMISS.BoundaryConditionsTypes.FIXED,1.1)
+boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,6,1,CMISS.BoundaryConditionsTypes.FIXED,1.1)
+boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,8,1,CMISS.BoundaryConditionsTypes.FIXED,1.1)
 
 # Set single arc-length derivatives
-for node in range (1,9):
-	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S2,node,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S3,node,1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S2,node,2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
-	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S3,node,2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S2,node,3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S3,node,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
+for node in range (0,8):
+	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S2,geometryNodes[node],1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
+	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S3,geometryNodes[node],1,CMISS.BoundaryConditionsTypes.FIXED,0.0)
+	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S2,geometryNodes[node],2,CMISS.BoundaryConditionsTypes.FIXED,1.0)
+	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S3,geometryNodes[node],2,CMISS.BoundaryConditionsTypes.FIXED,0.0)
+	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S2,geometryNodes[node],3,CMISS.BoundaryConditionsTypes.FIXED,0.0)
+	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S3,geometryNodes[node],3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
 
 # Set all cross derivatives to zero in all three directions. 
 for component in range (1,4):
-	for node in range (1,9):
-		boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S1_S2,node,component,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-		boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S1_S3,node,component,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-		boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S2_S3,node,component,CMISS.BoundaryConditionsTypes.FIXED,0.0)
-		boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S1_S2_S3,node,component,CMISS.BoundaryConditionsTypes.FIXED,0.0)
+	for node in range (0,8):
+		boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S1_S2,geometryNodes[node],component,CMISS.BoundaryConditionsTypes.FIXED,0.0)
+		boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S1_S3,geometryNodes[node],component,CMISS.BoundaryConditionsTypes.FIXED,0.0)
+		boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S2_S3,geometryNodes[node],component,CMISS.BoundaryConditionsTypes.FIXED,0.0)
+		boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.GLOBAL_DERIV_S1_S2_S3,geometryNodes[node],component,CMISS.BoundaryConditionsTypes.FIXED,0.0)
 
 solverEquations.BoundaryConditionsCreateFinish()
 
@@ -292,8 +298,6 @@ for component in [1,2,3]:
 # Export results to .exnode and .exelem files. 
 exportFields = CMISS.Fields()
 exportFields.CreateRegion(region)
-exportFields.NodesExport("../Results/UniAxialTransverselyIsotropic","FORTRAN")
-exportFields.ElementsExport("../Results/UniAxialTransverselyIsotropic","FORTRAN")
+exportFields.NodesExport("../Results/UniAxialTransverselyIsotropic_Quadratic","FORTRAN")
+exportFields.ElementsExport("../Results/UniAxialTransverselyIsotropic_Quadratic","FORTRAN")
 exportFields.Finalise()
-
-
