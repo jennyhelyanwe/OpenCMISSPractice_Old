@@ -118,8 +118,8 @@ fibreField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Fibre")
 fibreField.NumberOfVariablesSet(1)
 fibreField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 3)
 fibreField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
-for component in range (1,4):
-	fibreField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U, component, CMISS.FieldInterpolationTypes.CONSTANT)
+#for component in range (1,4):
+	#fibreField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U, component, CMISS.FieldInterpolationTypes.CONSTANT)
 fibreField.CreateFinish()
 
 # For future reference, how to get the nodes in a particular component of mesh. 
@@ -129,10 +129,13 @@ fibreField.CreateFinish()
 #cubicNodes = [n for n in range(1,numberOfNodes + 1) if mesh.NodeExists(cubicBasisNumber,n)]
 
 # Initialise the fibre rotation angles in radians
+totalNodes = [1,2,3,4,5,6,7,8]
 fibreFieldAngle = 30 * pi /180  # 30 degrees in radians
 fibreAngles = [fibreFieldAngle, 0, 0]
-for component, fibreAngle in enumerate(fibreAngles, 1):
-	fibreField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component, fibreAngle)
+for node in totalNodes:
+	for component, fibreAngle in enumerate(fibreAngles, 1):
+		fibreField.ParameterSetUpdateNodeDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, 1, node, component, fibreAngle)		
+		#fibreField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component, fibreAngle)
 
 ### Step 9: Material field ##########################################################
 materialField = CMISS.Field()
@@ -246,10 +249,10 @@ boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.G
 boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,7,3,CMISS.BoundaryConditionsTypes.FIXED,1.0)
 
 # Set displacement of face 2,4,6,8 in x direction
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,2,1,CMISS.BoundaryConditionsTypes.FIXED,-2.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,4,1,CMISS.BoundaryConditionsTypes.FIXED,-2.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,6,1,CMISS.BoundaryConditionsTypes.FIXED,-2.0)
-boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,8,1,CMISS.BoundaryConditionsTypes.FIXED,-2.0)
+boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,2,1,CMISS.BoundaryConditionsTypes.FIXED,-5.0)
+boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,4,1,CMISS.BoundaryConditionsTypes.FIXED,-5.0)
+boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,6,1,CMISS.BoundaryConditionsTypes.FIXED,-5.0)
+boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,8,1,CMISS.BoundaryConditionsTypes.FIXED,-5.0)
 
 # Set single arc-length derivatives
 for node in range (1,9):
