@@ -74,14 +74,26 @@ linearBasisNumber = 2
 bases = [cubicBasis, linearBasis]
 
 ### Step 5: Set up mesh ###############################################################
-generatedMesh = CMISS.GeneratedMesh()
-generatedMesh.CreateStart(generatedMeshUserNumber, region)
-generatedMesh.TypeSet(CMISS.GeneratedMeshTypes.REGULAR)
-generatedMesh.BasisSet(bases)
-generatedMesh.ExtentSet([width, length, height])
-generatedMesh.NumberOfElementsSet([numGlobalXElements, numGlobalYElements, numGlobalZElements])
 mesh = CMISS.Mesh()
-generatedMesh.CreateFinish(meshUserNumber, mesh)
+mesh.CreateStart(meshUserNumber, region, 3)
+mesh.NumberOfComponentsSet(2)
+mesh.NumberOfElementsSet(1)
+
+nodes = CMISS.Nodes()
+nodes.CreateStart(region, 8)
+nodes.CreateFinish()
+
+elemC = CMISS.MeshElements()
+elemC.CreateStart(mesh, 1, cubicBasis)
+elemC.NodesSet(1,[1,2,3,4,5,6,7,8])
+elemC.CreateFinish()
+
+elemL = CMISS.MeshElements()
+elemL.CreateStart(mesh, 2, linearBasis)
+elemL.NodesSet(1,[1,2,3,4,5,6,7,8])
+elemL.CreateFinish()
+
+mesh.CreateFinish()
 
 ### Step 6: Decomposition #############################################################
 decomposition = CMISS.Decomposition()
@@ -100,30 +112,39 @@ geometricField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Geometry")
 geometricField.NumberOfVariablesSet(1)
 geometricField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 3)
 for i in range (1,4):
-	geometricField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicBasisNumber)
-geometricField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
+	geometricField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
 geometricField.CreateFinish()
-# Update geometric parameters
-generatedMesh.GeometricParametersCalculate(geometricField)
+
+# Initialise geometric parameters
+xNodes = [0.0, 1.0, 0.0, 1.0, 0.0,  1.0, 0.0, 1.0]
+yNodes = [0.0, 0.0, 0.0, 0.0, -1.0, -1.0, -1.0, -1.0]
+zNodes = [0.0, 0.0, 1.0, 1.0, 0.0, 0.0, 1.0, 1.0]
+
+for node, value in enumerate(xNodes, 1):
+    geometricField.ParameterSetUpdateNodeDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV, node, 1, value)
+for node, value in enumerate(yNodes, 1):
+    geometricField.ParameterSetUpdateNodeDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV, node, 2, value)
+for node, value in enumerate(zNodes, 1):
+    geometricField.ParameterSetUpdateNodeDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV, node, 3, value)
 
 ### Step 8: Fibre field ###############################################################
 fibreField = CMISS.Field()
 fibreField.CreateStart(fibreFieldUserNumber, region)
+fibreField.TypeSet(CMISS.FieldTypes.FIBRE)
 fibreField.MeshDecompositionSet(decomposition)
 fibreField.GeometricFieldSet(geometricField)
-fibreField.TypeSet(CMISS.FieldTypes.FIBRE)
 fibreField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Fibre")
 fibreField.NumberOfVariablesSet(1)
 fibreField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 3)
-fibreField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
-for component in range (1,4):
-	fibreField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U, component, CMISS.FieldInterpolationTypes.CONSTANT)
+for i in range (1,4):
+	fibreField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i,1)
+
 fibreField.CreateFinish()
+
 # Initialise the fibre rotation angles in radians
-fibreFieldAngle = 30 * pi /180  # 30 degrees in radians
-fibreAngles = [fibreFieldAngle, 0, 0]
-for component, fibreAngle in enumerate(fibreAngles, 1):
-	fibreField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component, fibreAngle)
+fibreAngle = [0,0,0]
+for component, fibre in enumerate(fibreAngle,1):
+    fibreField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component, fibre)
 
 ### Step 9: Material Field ###########################################################
 materialField = CMISS.Field()
@@ -138,13 +159,29 @@ for i in range (1,8):
 	materialField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicBasisNumber)
 materialField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
 materialField.CreateFinish()
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, 0.2)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 2, 30.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 3, 12.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, 14.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 5, 14.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 5, 10.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 5, 18.0)
 
+# Set costa material parameters. 
+costaParameters = [0.2, 30.0, 12.0, 14.0, 14.0, 10.0, 18.0]
+for component, parameter in enumerate(costaParameters):
+	materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U,CMISS.FieldParameterSetTypes.VALUES,component, parameter)
+
+### Step 10: Create Independent field ############################################
+independentField = CMISS.Field()
+
+
+### Step 11: Create dependent field ##############################################
+dependentField = CMISS.Field()
+dependentField.CreateStart(dependentFieldUserNumber, region)
+dependentField.TypeSet(CMISS.FieldTypes.GEOMETRIC_GENERAL)
+dependentField.MeshDecompositionSet(decomposition)
+dependentField.GeometricFieldSet(geometricField)
+dependentField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Dependent")
+dependentField.DependentTypeSet(CMISS.FieldDependentTypes.DEPENDENT)
+dependentField.NumberOfVariablesSet(2)
+dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 4)
+dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.DELUDELN, 4)
+for i in [1,2,3]:
+    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
+    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
 
 
