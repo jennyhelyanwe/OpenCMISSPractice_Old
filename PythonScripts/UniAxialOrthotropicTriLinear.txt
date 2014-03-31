@@ -1,0 +1,12 @@
+This text file provides extra documentaiton for the corresponding python script. 
+
+Coordinate system, Region are standard.
+1 by 1 by 1 cube, single element. 
+
+> Basis
+Linear basis used for the cube. The xi1, xi2 and xi3 axes is set to be the right handed coordinate system. (While x y and z is the left handed coordinated system)
+
+Decomposition is standard. Geometric field is standard for the cube. 
+
+> Fibre
+Previously, in the transversely isotropic case, the sheet normal direction is not important since it has the same mechanic properties as the , however now in the orthotropic case, it is.  

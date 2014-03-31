@@ -136,7 +136,7 @@ for i in range (1,4):
 fibreField.CreateFinish()
 
 # Initialise the fibre rotation angles in radians
-fibreAngle = [0,90*pi/180,0]
+fibreAngle = [0,0,0]
 for component, fibre in enumerate(fibreAngle,1):
     fibreField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component, fibre)
 
@@ -149,15 +149,18 @@ materialField.MeshDecompositionSet(decomposition)
 materialField.GeometricFieldSet(geometricField)
 materialField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Material")
 materialField.NumberOfVariablesSet(1)
-materialField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 5)
-for i in range (1,5):
+materialField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 8)
+for i in range (1,9):
 	materialField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
 materialField.CreateFinish()
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, 2.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 2, 5.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 3, 20.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, 0.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 5, 2.0)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, 0.000059)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 2, 8.023)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 3, 0.018472)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, 0.002481)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 5, 16.026)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 6, 11.12)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 7, 0.000216)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 8, 11.436)
 
 ### Step 10: Dependent field ########################################################
 dependentField = CMISS.Field()
@@ -189,7 +192,7 @@ dependentField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.Field
 ### Step 11: Create Equation set #####################################################
 equationsSetField = CMISS.Field()
 equationsSet = CMISS.EquationsSet()
-equationsSet.CreateStart(equationsSetUserNumber, region, fibreField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.TRANSVERSE_ISOTROPIC_EXPONENTIAL, equationsSetFieldUserNumber, equationsSetField)
+equationsSet.CreateStart(equationsSetUserNumber, region, fibreField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.ORTHOTROPIC_HOLZAPFEL_OGDEN, equationsSetFieldUserNumber, equationsSetField)
 equationsSet.CreateFinish()
 equationsSet.MaterialsCreateStart(materialFieldUserNumber, materialField)
 equationsSet.MaterialsCreateFinish()
@@ -246,7 +249,7 @@ for node in leftFaceNodes:
 
 # Set right face with force application in x direction
 for node in rightFaceNodes:
-    boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,node, 1,CMISS.BoundaryConditionsTypes.FIXED, -2.0)
+    boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,node, 1,CMISS.BoundaryConditionsTypes.FIXED, 1.1)
 
 # Set bottom face fixed in z direction. 
 for node in bottomFaceNodes:
@@ -275,6 +278,6 @@ for component in [1,2,3]:
 
 exportFields = CMISS.Fields()
 exportFields.CreateRegion(region)
-exportFields.NodesExport("../Results/UniAxialTransverselyIsotropicTriLinear2Angle90","FORTRAN")
-exportFields.ElementsExport("../Results/UniAxialTransverselyIsotropicTriLinear2Angle90","FORTRAN")
+exportFields.NodesExport("../Results/UniAxialOrthotropicTriLinear","FORTRAN")
+exportFields.ElementsExport("../Results/UniAxialOrthotropicTriLinear","FORTRAN")
 exportFields.Finalise()

@@ -29,12 +29,13 @@ numOfXi = 3
 	geometricFieldUserNumber,
 	fibreFieldUserNumber,	
 	materialFieldUserNumber,
+    independentFieldUserNumber, 
 	dependentFieldUserNumber,
 	deformedFieldUserNumber,
 	equationsSetFieldUserNumber,
 	equationsSetUserNumber,
 	equationsUserNumber,
-	problemUserNumber) = range(1,17)
+	problemUserNumber) = range(1,18)
 
 ### Step 1: Set up parallel computing ##################################################
 numberOfNodes = CMISS.ComputationalNumberOfNodesGet()
@@ -165,12 +166,17 @@ costaParameters = [0.2, 30.0, 12.0, 14.0, 14.0, 10.0, 18.0]
 for component, parameter in enumerate(costaParameters):
 	materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U,CMISS.FieldParameterSetTypes.VALUES,component, parameter)
 
-### Step 10: Create Independent field ############################################
-independentField = CMISS.Field()
-
+### Step 10: Create equation set ####################################################
+equationsSetField = CMISS.Field()
+equationsSet = CMISS.EquationsSet()
+equationsSet.CreateStart(equationsSetUserNumber, region, fibreField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.ACTIVECONTRACTION, equationsSetFieldUserNumber, equationsSetField)
+equationsSet.CreateFinish()
 
 ### Step 11: Create dependent field ##############################################
 dependentField = CMISS.Field()
+equationsSet.DependentCreateStart(dependentFieldUserNumber, dependentField)
+equationsSet.DependentCreateFinish()
+
 dependentField.CreateStart(dependentFieldUserNumber, region)
 dependentField.TypeSet(CMISS.FieldTypes.GEOMETRIC_GENERAL)
 dependentField.MeshDecompositionSet(decomposition)
@@ -183,5 +189,16 @@ dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.DELUDELN, 4)
 for i in [1,2,3]:
     dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
     dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
+# Initialise from undeformed geometry
+for component in [1,2,3]:
+    geometricField.ParametersToFieldParametersComponentCopy(CMISS.FieldVariableTypes.U,CMISS.FieldParameterSetTypes.VALUES,component, dependentField,CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component)
+
+dependentField.ComponentValuesInitialiseDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, -8.0)
+
+
+### Step 12: Create independent field ############################################
+independentField = CMISS.Field()
+equationsSet.IndependentCreateStart(independentFieldUserNumber, independentField)
+equationsSet.IndependentCreateFinish()
 
 

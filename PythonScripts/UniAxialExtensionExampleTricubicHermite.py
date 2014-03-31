@@ -189,6 +189,13 @@ geometricField.ParameterSetUpdateNodeDP(CMISS.FieldVariableTypes.U, CMISS.FieldP
 geometricField.ParameterSetUpdateNodeDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES,1,1,8,3,height)
 geometricField.ParameterSetUpdateNodeDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES,1,5,8,3,1.0)
 
+# Export geometric field for debugging. 
+exportGeometricFields = CMISS.Fields()
+exportGeometricFields.CreateRegion(region)
+exportGeometricFields.NodesExport("GeometricField","FORTRAN")
+exportGeometricFields.ElementsExport("GeometricField","FORTRAN")
+exportGeometricFields.Finalise()
+
 ### Step 8: Create fibre field ########################################################
 fibre = CMISS.Field()
 fibre.CreateStart(fibreFieldUserNumber, region)
