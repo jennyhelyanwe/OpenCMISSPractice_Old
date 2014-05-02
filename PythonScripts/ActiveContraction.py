@@ -35,7 +35,8 @@ numOfXi = 3
 	equationsSetFieldUserNumber,
 	equationsSetUserNumber,
 	equationsUserNumber,
-	problemUserNumber) = range(1,18)
+	problemUserNumber,
+    cellMLUserNumber) = range(1,18)
 
 ### Step 1: Set up parallel computing ##################################################
 numberOfNodes = CMISS.ComputationalNumberOfNodesGet()
@@ -62,17 +63,6 @@ linearBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.LINEAR_LA
 linearBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.HIGH]*numOfXi)
 linearBasis.QuadratureLocalFaceGaussEvaluateSet(True)
 linearBasis.CreateFinish()
-
-cubicBasis = CMISS.Basis()
-cubicBasis.CreateStart(cubicBasisUserNumber)
-cubicBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.CUBIC_HERMITE]*numOfXi)
-cubicBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.HIGH]*numOfXi)
-cubicBasis.QuadratureLocalFaceGaussEvaluateSet(True)
-cubicBasis.CreateFinish()
-
-cubicBasisNumber = 1
-linearBasisNumber = 2
-bases = [cubicBasis, linearBasis]
 
 ### Step 5: Set up mesh ###############################################################
 mesh = CMISS.Mesh()
@@ -157,13 +147,13 @@ materialField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Material")
 materialField.NumberOfVariablesSet(1)
 materialField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 7)
 for i in range (1,8):
-	materialField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, cubicBasisNumber)
+	materialField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
 materialField.ScalingTypeSet(CMISS.FieldScalingTypes.UNIT)
 materialField.CreateFinish()
 
 # Set costa material parameters. 
-costaParameters = [0.2, 30.0, 12.0, 14.0, 14.0, 10.0, 18.0]
-for component, parameter in enumerate(costaParameters):
+MRParameters = [2.0, 6.0]
+for component, parameter in enumerate(MRParameters):
 	materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U,CMISS.FieldParameterSetTypes.VALUES,component, parameter)
 
 ### Step 10: Create equation set ####################################################
@@ -183,22 +173,40 @@ dependentField.MeshDecompositionSet(decomposition)
 dependentField.GeometricFieldSet(geometricField)
 dependentField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Dependent")
 dependentField.DependentTypeSet(CMISS.FieldDependentTypes.DEPENDENT)
-dependentField.NumberOfVariablesSet(2)
+dependentField.NumberOfVariablesSet(4)
 dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 4)
 dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.DELUDELN, 4)
-for i in [1,2,3]:
+dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U1, 6) # storing strain
+dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U2, 6) # storing stress
+
+for component in range (1,7):
+    dependentField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U1, component, CMISS.FieldInterpolationTypes.GAUSS_POINT_BASED)
+    dependentField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U2, component, CMISS.FieldInterpolationTypes.GAUSS_POINT_BASED)
+
+for i in range (1,5):
     dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
-    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
+    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U1, i, 1)
+for i in range (1,7):
+    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U2, i, 1)
+    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN, i, 1)    
+dependentField.CreateFinish()
+
 # Initialise from undeformed geometry
 for component in [1,2,3]:
     geometricField.ParametersToFieldParametersComponentCopy(CMISS.FieldVariableTypes.U,CMISS.FieldParameterSetTypes.VALUES,component, dependentField,CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component)
 
 dependentField.ComponentValuesInitialiseDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, -8.0)
 
+### Step 12: Create CellML environment ###########################################
+ActiveContractionModelIndex = 1
+cellML = CMISS.CellML()
+cellML.CreateStart(cellMLUserNumber, region)
+cellML.ModelImport("active_contraction.cellml", ActiveContractionModelIndex)
 
-### Step 12: Create independent field ############################################
-independentField = CMISS.Field()
-equationsSet.IndependentCreateStart(independentFieldUserNumber, independentField)
-equationsSet.IndependentCreateFinish()
+strain = ["E11", "E12", "E13", "E22", "E23", "E33"]
+stressCauchy = ["Tdev11", "Tdev12", "Tdev13", "Tdev22", "Tdev23", "Tdev33"]
+
+for  i in range (0,6):
+    cellML.VariableSetAsKnown(ActiveContractionModelIndex, "equations"+strain[i])
 
 

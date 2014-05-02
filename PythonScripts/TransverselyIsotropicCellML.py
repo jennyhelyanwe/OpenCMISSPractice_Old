@@ -1,16 +1,12 @@
-############ Uniaxial extension using transversely isotropic cube ######################
-## This script solves a uniaxial extension on a cubic which is transversely isotropic
-## with homogeneous fibre directions. 
-## The geometry of the cube is interpolated using a tricubic hermite element. 
-
+###################### Uniaxial Load on transversely isotropic cube ##############
+## This script solves a uniaxial pressure load along the fibre direction of a 
+## unit cube. It uses the transversely isotropic constitutive law. 
 
 ### Step 0: Housekeeping ##############################################################
 import os, sys
 sys.path.append(os.sep.join((os.environ['OPENCMISS_ROOT'],'cm','bindings','python')));
 from math import pi
 from opencmiss import CMISS
-CMISS.DiagnosticsSetOn(CMISS.DiagnosticTypes.ALL,[1,2,3,4,5],"Diagnostics",["DOMAIN_MAPPINGS_LOCAL_FROM_GLOBAL_CALCULATE"])
-
 
 # Problem parameters
 length = 1.0
@@ -25,7 +21,7 @@ numOfXi = 3
 # User numbers
 (coordinateSystemUserNumber,
 	regionUserNumber,
-	quadraticBasisUserNumber,
+	linearBasisUserNumber,
 	cubicBasisUserNumber,
 	generatedMeshUserNumber,
 	meshUserNumber,
@@ -33,12 +29,17 @@ numOfXi = 3
 	geometricFieldUserNumber,
 	fibreFieldUserNumber,	
 	materialFieldUserNumber,
+    independentFieldUserNumber, 
 	dependentFieldUserNumber,
 	deformedFieldUserNumber,
 	equationsSetFieldUserNumber,
 	equationsSetUserNumber,
 	equationsUserNumber,
-	problemUserNumber) = range(1,17)
+	problemUserNumber,
+    cellMLUserNumber,
+    CellMLModelsFieldUserNumber,
+    CellMLParametersFieldUserNumber,
+    CellMLIntermediateFieldUserNumber) = range(1,22)
 
 ### Step 1: Set up parallel computing ##################################################
 numberOfNodes = CMISS.ComputationalNumberOfNodesGet()
@@ -60,9 +61,9 @@ region.CreateFinish()
 
 ### Step 3: Basis functions ############################################################
 linearBasis = CMISS.Basis()
-linearBasis.CreateStart(quadraticBasisUserNumber)
+linearBasis.CreateStart(linearBasisUserNumber)
 linearBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.LINEAR_LAGRANGE]*numOfXi)
-linearBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.LOW]*numOfXi)
+linearBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.HIGH]*numOfXi)
 linearBasis.QuadratureLocalFaceGaussEvaluateSet(True)
 linearBasis.CreateFinish()
 
@@ -76,12 +77,13 @@ nodes = CMISS.Nodes()
 nodes.CreateStart(region, 8)
 nodes.CreateFinish()
 
-elem = CMISS.MeshElements()
-elem.CreateStart(mesh, 1, linearBasis)
-elem.NodesSet(1,[1,2,3,4,5,6,7,8])
-elem.CreateFinish()
+elemL = CMISS.MeshElements()
+elemL.CreateStart(mesh,1, linearBasis)
+elemL.NodesSet(1,[1,2,3,4,5,6,7,8])
+elemL.CreateFinish()
 
 mesh.CreateFinish()
+
 ### Step 6: Decomposition #############################################################
 decomposition = CMISS.Decomposition()
 decomposition.CreateStart(decompositionUserNumber, mesh)
@@ -113,15 +115,8 @@ for node, value in enumerate(yNodes, 1):
     geometricField.ParameterSetUpdateNodeDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV, node, 2, value)
 for node, value in enumerate(zNodes, 1):
     geometricField.ParameterSetUpdateNodeDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV, node, 3, value)
- 
-# Export geometric field for debugging. 
-exportGeometricFields = CMISS.Fields()
-exportGeometricFields.CreateRegion(region)
-exportGeometricFields.NodesExport("GeometricField","FORTRAN")
-exportGeometricFields.ElementsExport("GeometricField","FORTRAN")
-exportGeometricFields.Finalise()
 
-### Step 8: Create fibre field #######################################################
+### Step 8: Fibre field ###############################################################
 fibreField = CMISS.Field()
 fibreField.CreateStart(fibreFieldUserNumber, region)
 fibreField.TypeSet(CMISS.FieldTypes.FIBRE)
@@ -136,12 +131,11 @@ for i in range (1,4):
 fibreField.CreateFinish()
 
 # Initialise the fibre rotation angles in radians
-fibreAngle = [90*pi/180,0,0]
+fibreAngle = [0,0,0]
 for component, fibre in enumerate(fibreAngle,1):
     fibreField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component, fibre)
 
-
-### Step 9: Material field ##########################################################
+### Step 9: Material Field ###########################################################
 materialField = CMISS.Field()
 materialField.CreateStart(materialFieldUserNumber, region)
 materialField.TypeSet(CMISS.FieldTypes.MATERIAL)
@@ -151,59 +145,123 @@ materialField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Material")
 materialField.NumberOfVariablesSet(1)
 materialField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 4)
 for i in range (1,5):
-	materialField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
+	materialField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U, i, CMISS.FieldInterpolationTypes.CONSTANT)
 materialField.CreateFinish()
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, 2.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 2, 3.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 3, 1.0)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, 3.0)
+#parameters = [2.0, 3.0]
+parameters = [2.0, 3.0, 1.0, 3.0]
+for component, param in enumerate(parameters, 1):
+    materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component, param)
 
-### Step 10: Dependent field ########################################################
+### Step 10: Create equation set ####################################################
+equationsSetField = CMISS.Field()
+equationsSet = CMISS.EquationsSet()
+equationsSet.CreateStart(equationsSetUserNumber, region, fibreField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.CONSTITUTIVE_LAW_IN_CELLML_EVALUATE, equationsSetFieldUserNumber, equationsSetField)
+equationsSet.CreateFinish()
+
+### Step 11: Create dependent field ##############################################
+DependentVariableTypes = [CMISS.FieldVariableTypes.U, CMISS.FieldVariableTypes.DELUDELN, CMISS.FieldVariableTypes.U1, CMISS.FieldVariableTypes.U2 ]
+
 dependentField = CMISS.Field()
-dependentField.CreateStart(dependentFieldUserNumber, region)
+dependentField.CreateStart(dependentFieldUserNumber,region)
 dependentField.TypeSet(CMISS.FieldTypes.GEOMETRIC_GENERAL)
 dependentField.MeshDecompositionSet(decomposition)
 dependentField.GeometricFieldSet(geometricField)
 dependentField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Dependent")
 dependentField.DependentTypeSet(CMISS.FieldDependentTypes.DEPENDENT)
-dependentField.NumberOfVariablesSet(2)
+dependentField.NumberOfVariablesSet(4)
+dependentField.VariableTypesSet(DependentVariableTypes)
 dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 4)
+dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U1, 6) # storing strain
+dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U2, 6) # storing stress
 dependentField.NumberOfComponentsSet(CMISS.FieldVariableTypes.DELUDELN, 4)
-for i in range (1,4):
-	dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
-	dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN,i,1)
-dependentField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U, 4, CMISS.FieldInterpolationTypes.ELEMENT_BASED)
-dependentField.ComponentInterpolationSet(CMISS.FieldVariableTypes.DELUDELN, 4, CMISS.FieldInterpolationTypes.ELEMENT_BASED)
+
+for component in range (1,7):
+    dependentField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U1, component, CMISS.FieldInterpolationTypes.GAUSS_POINT_BASED)
+    dependentField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U2, component, CMISS.FieldInterpolationTypes.GAUSS_POINT_BASED)
+
+for i in range (1,5):
+    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
+    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.DELUDELN, i,1) 
+for i in range (1,7):
+    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U2, i, 1)
+    dependentField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U1, i, 1)
+       
 dependentField.CreateFinish()
 
-# Initialise dependent field from undeformed geometry. 
-for i in range (1,4):
-	CMISS.Field.ParametersToFieldParametersComponentCopy(
-geometricField, CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, i, 
-dependentField, CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, i)
-
-# Set hydrostatic pressure. 
-dependentField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, -8.0)
-
-### Step 11: Create Equation set #####################################################
-equationsSetField = CMISS.Field()
-equationsSet = CMISS.EquationsSet()
-equationsSet.CreateStart(equationsSetUserNumber, region, fibreField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.TRANSVERSE_ISOTROPIC_GUCCIONE, equationsSetFieldUserNumber, equationsSetField)
-equationsSet.CreateFinish()
-equationsSet.MaterialsCreateStart(materialFieldUserNumber, materialField)
+equationsSet.MaterialsCreateStart(materialFieldUserNumber,materialField)
 equationsSet.MaterialsCreateFinish()
 equationsSet.DependentCreateStart(dependentFieldUserNumber, dependentField)
 equationsSet.DependentCreateFinish()
+
 equations = CMISS.Equations()
 equationsSet.EquationsCreateStart(equations)
 equations.SparsityTypeSet(CMISS.EquationsSparsityTypes.SPARSE)
 equations.OutputTypeSet(CMISS.EquationsOutputTypes.NONE)
 equationsSet.EquationsCreateFinish()
+# Initialise from undeformed geometry
+for component in [1,2,3]:
+    geometricField.ParametersToFieldParametersComponentCopy(CMISS.FieldVariableTypes.U,CMISS.FieldParameterSetTypes.VALUES,component, dependentField,CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component)
 
-### Step 12: Problem ################################################################
+dependentField.ComponentValuesInitialiseDP(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, -8.0)
+
+# Initialise strain and stress fields
+for i in range(1,7):
+    dependentField.ComponentValuesInitialiseDP(CMISS.FieldVariableTypes.U1, CMISS.FieldParameterSetTypes.VALUES, i, 0.0)
+    dependentField.ComponentValuesInitialiseDP(CMISS.FieldVariableTypes.U2, CMISS.FieldParameterSetTypes.VALUES, i, 0.0)
+
+### Step 12: Create CellML environment ###########################################
+TransIsoModelIndex = 1
+cellML = CMISS.CellML()
+cellML.CreateStart(cellMLUserNumber, region)
+cellML.ModelImport("transversely_isotropic.cellml")
+parameter = ["C1", "C2","C3", "C4"]
+strain = ["E11", "E12", "E13", "E22", "E23", "E33"]
+stress2PK = ["Tdev11", "Tdev12", "Tdev13", "Tdev22", "Tdev23", "Tdev33"]
+
+# Set strains as known in CellML. These will be fed into the model from iron. 
+for i in range(0,6):
+    cellML.VariableSetAsKnown(TransIsoModelIndex, "equations/"+strain[i])
+for i in range(0,4):
+    cellML.VariableSetAsKnown(TransIsoModelIndex, "equations/"+parameter[i])
+
+# Set stresses as unknown in CellML. These will be calculated using the transversely isotropic constitutive model 
+for i in range (0,6):
+    cellML.VariableSetAsWanted(TransIsoModelIndex, "equations/"+stress2PK[i])
+cellML.CreateFinish()
+
+### Step 13: Map the variables to CellML model ###################################
+cellML.FieldMapsCreateStart()
+# Map the strain from dependentField U1 variable to CellML. 
+for i in range(0,6):
+    cellML.CreateFieldToCellMLMap(dependentField, CMISS.FieldVariableTypes.U1, i+1, CMISS.FieldParameterSetTypes.VALUES, TransIsoModelIndex, "equations/"+strain[i], CMISS.FieldParameterSetTypes.VALUES)
+for i in range(0,4):
+    cellML.CreateFieldToCellMLMap(materialField, CMISS.FieldVariableTypes.U,i+1, CMISS.FieldParameterSetTypes.VALUES, TransIsoModelIndex, "equations/"+parameter[i], CMISS.FieldParameterSetTypes.VALUES)
+# Map the stress from CellML to dependentFieldU2 variable
+for i in range(0,6):
+    cellML.CreateCellMLToFieldMap(TransIsoModelIndex, "equations/"+stress2PK[i], CMISS.FieldParameterSetTypes.VALUES, dependentField, CMISS.FieldVariableTypes.U2, i+1, CMISS.FieldParameterSetTypes.VALUES)
+cellML.FieldMapsCreateFinish()
+
+# Create models field for CellML
+CellMLModelsField = CMISS.Field()
+cellML.ModelsFieldCreateStart(CellMLModelsFieldUserNumber, CellMLModelsField)
+cellML.ModelsFieldCreateFinish()
+
+# No need to create a state field since we aren't integrating. 
+
+# Create parameters field for CellML, this is used as the strain field. 
+CellMLParametersField = CMISS.Field()
+cellML.ParametersFieldCreateStart(CellMLParametersFieldUserNumber, CellMLParametersField)
+cellML.ParametersFieldCreateFinish()
+
+# Create intermediate field for CellML, this is used as the stress field. 
+CellMLIntermediateField = CMISS.Field()
+cellML.IntermediateFieldCreateStart(CellMLIntermediateFieldUserNumber, CellMLIntermediateField)
+cellML.IntermediateFieldCreateFinish()
+
+### Step 14: Problem ################################################################
 problem =CMISS.Problem()
 problem.CreateStart(problemUserNumber)
-problem.SpecificationSet(CMISS.ProblemClasses.ELASTICITY, CMISS.ProblemTypes.FINITE_ELASTICITY, CMISS.ProblemSubTypes.NONE)
+problem.SpecificationSet(CMISS.ProblemClasses.ELASTICITY, CMISS.ProblemTypes.FINITE_ELASTICITY, CMISS.ProblemSubTypes.FINITE_ELASTICITY_CELLML)
 problem.CreateFinish()
 
 problem.ControlLoopCreateStart()
@@ -211,18 +269,18 @@ controlLoop = CMISS.ControlLoop()
 problem.ControlLoopGet([CMISS.ControlLoopIdentifiers.NODE], controlLoop)
 problem.ControlLoopCreateFinish()
 
-### Step 13: Solvers ################################################################
+### Step 15: Solvers ################################################################
 nonLinearSolver = CMISS.Solver()
 linearSolver = CMISS.Solver()
 problem.SolversCreateStart()
 problem.SolverGet([CMISS.ControlLoopIdentifiers.NODE], 1, nonLinearSolver)
 nonLinearSolver.OutputTypeSet(CMISS.SolverOutputTypes.PROGRESS)
-nonLinearSolver.NewtonJacobianCalculationTypeSet(CMISS.JacobianCalculationTypes.EQUATIONS)
+nonLinearSolver.NewtonJacobianCalculationTypeSet(CMISS.JacobianCalculationTypes.FD)
 nonLinearSolver.NewtonLinearSolverGet(linearSolver)
 linearSolver.LinearTypeSet(CMISS.LinearSolverTypes.DIRECT)
 problem.SolversCreateFinish()
 
-### Step 14: Solver equations #######################################################
+### Step 16: Solver equations #######################################################
 solver = CMISS.Solver()
 solverEquations = CMISS.SolverEquations()
 problem.SolverEquationsCreateStart()
@@ -231,7 +289,15 @@ solverEquations.SparsityTypeSet(CMISS.EquationsSparsityTypes.SPARSE)
 solverEquations.EquationsSetAdd(equationsSet)
 problem.SolverEquationsCreateFinish()
 
-### Step 15: Boundary conditions #####################################################
+cellMLSolver = CMISS.Solver()
+cellMLEquations = CMISS.CellMLEquations()
+problem.CellMLEquationsCreateStart()
+nonLinearSolver.NewtonCellMLSolverGet(cellMLSolver)
+cellMLSolver.CellMLEquationsGet(cellMLEquations)
+cellMLEquations.CellMLAdd(cellML)
+problem.CellMLEquationsCreateFinish()
+
+### Step 17: Boundary Conditions ###################################################
 boundaryConditions = CMISS.BoundaryConditions()
 solverEquations.BoundaryConditionsCreateStart(boundaryConditions)
 
@@ -244,7 +310,7 @@ for node in leftFaceNodes:
 	boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1, CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV, node, 1, CMISS.BoundaryConditionsTypes.FIXED, 0.0)
 
 # Set right face with force application in x direction
-"""
+
 rightFaceNormalXi = 1
 BCPressure = CMISS.BoundaryConditionsTypes.PRESSURE_INCREMENTED
 for node in rightFaceNodes:
@@ -253,7 +319,7 @@ for node in rightFaceNodes:
 # Set right face with x extension
 for node in rightFaceNodes:
     boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1, 1,node, 1,CMISS.BoundaryConditionsTypes.FIXED, 1.1)
-
+"""
 # Set bottom face fixed in z direction. 
 for node in bottomFaceNodes:
     boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U,1, CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV, node, 3, CMISS.BoundaryConditionsTypes.FIXED, 0.0)
@@ -263,10 +329,10 @@ for node in backFaceNodes:
     boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U,1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV, node, 2, CMISS.BoundaryConditionsTypes.FIXED, 0.0)
 solverEquations.BoundaryConditionsCreateFinish()
 
-### Step 14: Solve the problem ########################################################
+### Step 18: ####################################################################
 problem.Solve()
 
-### Step 15: Housekeeping #############################################################
+### Step 19: Housekeeping #######################################################
 deformedField = CMISS.Field()
 deformedField.CreateStart(deformedFieldUserNumber, region)
 deformedField.MeshDecompositionSet(decomposition)
@@ -281,6 +347,9 @@ for component in [1,2,3]:
 
 exportFields = CMISS.Fields()
 exportFields.CreateRegion(region)
-exportFields.NodesExport("../Results/UniAxialTransverselyIsotropicTriLinear1Angle90","FORTRAN")
-exportFields.ElementsExport("../Results/UniAxialTransverselyIsotropicTriLinear1Angle90","FORTRAN")
+exportFields.NodesExport("../Results/TransverselyIsotropicCellML","FORTRAN")
+exportFields.ElementsExport("../Results/TransverselyIsotropicCellML","FORTRAN")
 exportFields.Finalise()
+
+
+

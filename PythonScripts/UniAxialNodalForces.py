@@ -28,10 +28,11 @@ numOfXi = 3
     equationsSetUserNumber,
     equationsSetFieldUserNumber,
     dependentFieldUserNumber,
+    deformedFieldUserNumber,
     equationsSetUserNumber,
     problemUserNumber,
     fibreFieldUserNumber,
-    materialFieldUserNumber) = range(1,15)
+    materialFieldUserNumber) = range(1,16)
 
 
 ### Set up diagnostics/debug
@@ -261,7 +262,6 @@ problem.SolverEquationsCreateFinish()
 BC = CMISS.BoundaryConditions()
 solverEquations.BoundaryConditionsCreateStart(BC)
 
-# Set BC for extension of 10% in positive x direction. 
 fixed = CMISS.BoundaryConditionsTypes.FIXED
 BC.AddNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,1,1, fixed, 0.0) # Inputs are: field, variable type, version number, derivative number, node user number, component number, condition (free, fixed, neumann, dirichlet, pressure, etc.), value. 
 BC.AddNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,3,1, fixed, 0.0)
@@ -281,10 +281,10 @@ BC.AddNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,3,3, fixed, 0.0)
 BC.AddNode(dependentField, CMISS.FieldVariableTypes.U, 1,1,4,3, fixed, 0.0)
 
 # Apply nodal forces on 2,4,6,8 face.
-BC.AddNode(dependentField, CMISS.FieldVariableTypes.DELUDELN,1,1,2,1, fixed, -2.0)
-BC.AddNode(dependentField, CMISS.FieldVariableTypes.DELUDELN,1,1,4,1, fixed, -2.0)
-BC.AddNode(dependentField, CMISS.FieldVariableTypes.DELUDELN,1,1,6,1, fixed, -2.0)
-BC.AddNode(dependentField, CMISS.FieldVariableTypes.DELUDELN,1,1,8,1, fixed, -2.0)
+BC.AddNode(dependentField, CMISS.FieldVariableTypes.DELUDELN,1,1,2,1, fixed, 1.0196)
+BC.AddNode(dependentField, CMISS.FieldVariableTypes.DELUDELN,1,1,4,1, fixed, 1.0196)
+BC.AddNode(dependentField, CMISS.FieldVariableTypes.DELUDELN,1,1,6,1, fixed, 1.0196)
+BC.AddNode(dependentField, CMISS.FieldVariableTypes.DELUDELN,1,1,8,1, fixed, 1.0196)
 
 # Finish
 solverEquations.BoundaryConditionsCreateFinish()
@@ -292,12 +292,21 @@ solverEquations.BoundaryConditionsCreateFinish()
 ### Solve problem
 problem.Solve()
 
+# Copy dependentfield into deformed field. 
+deformedField = CMISS.Field()
+deformedField.CreateStart(deformedFieldUserNumber, region)
+deformedField.MeshDecompositionSet(decomposition)
+deformedField.TypeSet(CMISS.FieldTypes.GEOMETRIC)
+deformedField.VariableLabelSet(CMISS.FieldVariableTypes.U, "DeformedGeometry")
+for component in [1,2,3]:
+    deformedField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, component, 1)
+deformedField.CreateFinish()
+for component in [1,2,3]:
+    dependentField.ParametersToFieldParametersComponentCopy(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component, deformedField, CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component)
 ### Export results
 fields = CMISS.Fields()
 fields.CreateRegion(region)
 fields.NodesExport("../Results/UniAxialNodalForces", "FORTRAN")
 fields.ElementsExport("../Results/UniAxialNodalForces","FORTRAN")
 fields.Finalise()
-
-
 

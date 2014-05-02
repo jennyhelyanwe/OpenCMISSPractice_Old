@@ -62,7 +62,7 @@ region.CreateFinish()
 linearBasis = CMISS.Basis()
 linearBasis.CreateStart(quadraticBasisUserNumber)
 linearBasis.InterpolationXiSet([CMISS.BasisInterpolationSpecifications.LINEAR_LAGRANGE]*numOfXi)
-linearBasis.QuadratureNumberOfGaussXiSet([CMISS.BasisQuadratureSchemes.LOW]*numOfXi)
+linearBasis.QuadratureNumberOfGaussXiSet([2]*numOfXi)
 linearBasis.QuadratureLocalFaceGaussEvaluateSet(True)
 linearBasis.CreateFinish()
 
@@ -153,13 +153,13 @@ materialField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 8)
 for i in range (1,9):
 	materialField.ComponentMeshComponentSet(CMISS.FieldVariableTypes.U, i, 1)
 materialField.CreateFinish()
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, 0.000059)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 1, 0.059)
 materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 2, 8.023)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 3, 0.018472)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, 0.002481)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 5, 16.026)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 3, 18.472)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 4, 16.026)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 5, 2.481)
 materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 6, 11.12)
-materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 7, 0.000216)
+materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 7, 0.216)
 materialField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, 8, 11.436)
 
 ### Step 10: Dependent field ########################################################
@@ -249,7 +249,7 @@ for node in leftFaceNodes:
 
 # Set right face with force application in x direction
 for node in rightFaceNodes:
-    boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,node, 1,CMISS.BoundaryConditionsTypes.FIXED, 1.1)
+    boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,node, 1,CMISS.BoundaryConditionsTypes.FIXED, -3.0)
 
 # Set bottom face fixed in z direction. 
 for node in bottomFaceNodes:
