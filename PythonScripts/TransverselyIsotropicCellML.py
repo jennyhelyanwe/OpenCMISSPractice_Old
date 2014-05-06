@@ -162,9 +162,8 @@ equationsSet = CMISS.EquationsSet()
 equationsSet.CreateStart(equationsSetUserNumber, region, fibreField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.CONSTITUTIVE_LAW_IN_CELLML_EVALUATE, equationsSetFieldUserNumber, equationsSetField)
 equationsSet.CreateFinish()
 
-#equationsSet.MaterialsCreateStart(materialFieldUserNumber,materialField)
-
-#equationsSet.MaterialsCreateFinish()
+equationsSet.MaterialsCreateStart(materialFieldUserNumber,materialField)
+equationsSet.MaterialsCreateFinish()
 ### Step 11: Create dependent field ##############################################
 DependentVariableTypes = [CMISS.FieldVariableTypes.U, CMISS.FieldVariableTypes.DELUDELN, CMISS.FieldVariableTypes.U1, CMISS.FieldVariableTypes.U2 ]
 
