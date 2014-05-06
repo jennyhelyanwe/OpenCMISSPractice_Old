@@ -136,13 +136,16 @@ for component, fibre in enumerate(fibreAngle,1):
     fibreField.ComponentValuesInitialise(CMISS.FieldVariableTypes.U, CMISS.FieldParameterSetTypes.VALUES, component, fibre)
 
 ### Step 9: Material Field ###########################################################
+
+#MaterialVariableTypes = [CMISS.FieldVariableTypes.U, CMISS.FieldVariableTypes.DELUDELN,CMISS.FieldVariableTypes.U1]
 materialField = CMISS.Field()
 materialField.CreateStart(materialFieldUserNumber, region)
 materialField.TypeSet(CMISS.FieldTypes.MATERIAL)
 materialField.MeshDecompositionSet(decomposition)
 materialField.GeometricFieldSet(geometricField)
-materialField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Material")
 materialField.NumberOfVariablesSet(1)
+#materialField.VariableTypesSet(MaterialVariableTypes)
+materialField.VariableLabelSet(CMISS.FieldVariableTypes.U, "Material")
 materialField.NumberOfComponentsSet(CMISS.FieldVariableTypes.U, 4)
 for i in range (1,5):
 	materialField.ComponentInterpolationSet(CMISS.FieldVariableTypes.U, i, CMISS.FieldInterpolationTypes.CONSTANT)
@@ -155,9 +158,13 @@ for component, param in enumerate(parameters, 1):
 ### Step 10: Create equation set ####################################################
 equationsSetField = CMISS.Field()
 equationsSet = CMISS.EquationsSet()
+#equationsSet.CreateStart(equationsSetUserNumber, region, fibreField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.TRANSVERSE_ISOTROPIC_GUCCIONE, equationsSetFieldUserNumber, equationsSetField)
 equationsSet.CreateStart(equationsSetUserNumber, region, fibreField, CMISS.EquationsSetClasses.ELASTICITY, CMISS.EquationsSetTypes.FINITE_ELASTICITY, CMISS.EquationsSetSubtypes.CONSTITUTIVE_LAW_IN_CELLML_EVALUATE, equationsSetFieldUserNumber, equationsSetField)
 equationsSet.CreateFinish()
 
+#equationsSet.MaterialsCreateStart(materialFieldUserNumber,materialField)
+
+#equationsSet.MaterialsCreateFinish()
 ### Step 11: Create dependent field ##############################################
 DependentVariableTypes = [CMISS.FieldVariableTypes.U, CMISS.FieldVariableTypes.DELUDELN, CMISS.FieldVariableTypes.U1, CMISS.FieldVariableTypes.U2 ]
 
@@ -188,8 +195,7 @@ for i in range (1,7):
        
 dependentField.CreateFinish()
 
-equationsSet.MaterialsCreateStart(materialFieldUserNumber,materialField)
-equationsSet.MaterialsCreateFinish()
+
 equationsSet.DependentCreateStart(dependentFieldUserNumber, dependentField)
 equationsSet.DependentCreateFinish()
 
@@ -235,6 +241,7 @@ cellML.FieldMapsCreateStart()
 for i in range(0,6):
     cellML.CreateFieldToCellMLMap(dependentField, CMISS.FieldVariableTypes.U1, i+1, CMISS.FieldParameterSetTypes.VALUES, TransIsoModelIndex, "equations/"+strain[i], CMISS.FieldParameterSetTypes.VALUES)
 for i in range(0,4):
+    print "equations/"+parameter[i]+"\n"
     cellML.CreateFieldToCellMLMap(materialField, CMISS.FieldVariableTypes.U,i+1, CMISS.FieldParameterSetTypes.VALUES, TransIsoModelIndex, "equations/"+parameter[i], CMISS.FieldParameterSetTypes.VALUES)
 # Map the stress from CellML to dependentFieldU2 variable
 for i in range(0,6):
@@ -315,11 +322,11 @@ rightFaceNormalXi = 1
 BCPressure = CMISS.BoundaryConditionsTypes.PRESSURE_INCREMENTED
 for node in rightFaceNodes:
     boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.DELUDELN, 1,CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV,node,rightFaceNormalXi,BCPressure,-2.097)
-"""
+
 # Set right face with x extension
 for node in rightFaceNodes:
     boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U, 1, 1,node, 1,CMISS.BoundaryConditionsTypes.FIXED, 1.1)
-"""
+
 # Set bottom face fixed in z direction. 
 for node in bottomFaceNodes:
     boundaryConditions.SetNode(dependentField, CMISS.FieldVariableTypes.U,1, CMISS.GlobalDerivativeConstants.NO_GLOBAL_DERIV, node, 3, CMISS.BoundaryConditionsTypes.FIXED, 0.0)
@@ -350,6 +357,5 @@ exportFields.CreateRegion(region)
 exportFields.NodesExport("../Results/TransverselyIsotropicCellML","FORTRAN")
 exportFields.ElementsExport("../Results/TransverselyIsotropicCellML","FORTRAN")
 exportFields.Finalise()
-
 
 
